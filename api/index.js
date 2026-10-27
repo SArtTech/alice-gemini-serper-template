@@ -5,9 +5,9 @@ const MAX_HISTORY_MESSAGES = 8;
 const MAX_HISTORY_MESSAGE_CHARS = 420;
 const MAX_ALICE_TEXT = 1024;
 const MAX_SESSION_BYTES = 940;
-const TOTAL_RESPONSE_BUDGET_MS = 3200;
-const SERPER_TIMEOUT_MS = 550;
-const GEMINI_TIMEOUT_MS = 2300;
+const TOTAL_RESPONSE_BUDGET_MS = 3500;
+const SERPER_TIMEOUT_MS = 1700;
+const GEMINI_TIMEOUT_MS = 2050;
 
 const SYSTEM_PROMPT = [
   "Ты — Эдит ИИ, дружелюбная голосовая помощница, которая отвечает через Яндекс Станцию.",
@@ -321,7 +321,7 @@ export default async function handler(req, res) {
       }
       searchContext = await searchWeb(
         text,
-        Math.min(SERPER_TIMEOUT_MS, Math.max(0, remainingMs() - 2500))
+        Math.min(SERPER_TIMEOUT_MS, Math.max(0, remainingMs() - 1750))
       );
       if (!searchContext) {
         return res.status(200).json(aliceResponse(
