@@ -1,7 +1,10 @@
+import { timingSafeEqual } from "node:crypto";
+
 const DEFAULT_MODEL = "gemini-3.5-flash-lite";
 const MAX_HISTORY_MESSAGES = 8;
 const MAX_HISTORY_MESSAGE_CHARS = 1200;
 const MAX_ALICE_TEXT = 1024;
+const MAX_SESSION_BYTES = 940;
 const TOTAL_RESPONSE_BUDGET_MS = 3600;
 const SERPER_TIMEOUT_MS = 600;
 const GEMINI_TIMEOUT_MS = 2500;
@@ -14,6 +17,26 @@ const SYSTEM_PROMPT = [
   "Если не знаешь ответа, честно скажи об этом."
 ].join(" ");
 
+function boundedHistory(history) {
+  const safe = safeHistory(history);
+  let iterations = 0;
+  while (Buffer.byteLength(JSON.stringify({ history: safe }), "utf8") > MAX_SESSION_BYTES && iterations++ < 200) {
+    if (safe.length > 2) {
+      safe.shift();
+      continue;
+    }
+    const idx = safe.length - 1;
+    if (idx < 0) break;
+    const last = safe[idx];
+    if (last.text.length > 32) {
+      last.text = last.text.slice(0, Math.floor(last.text.length * 0.75));
+    } else {
+      safe.shift();
+    }
+  }
+  return safe;
+}
+
 function aliceResponse(text, endSession = false, history = []) {
   return {
     version: "1.0",
@@ -21,7 +44,7 @@ function aliceResponse(text, endSession = false, history = []) {
       text: fitAliceText(text),
       end_session: endSession
     },
-    session_state: { history }
+    session_state: { history: boundedHistory(history) }
   };
 }
 
@@ -204,9 +227,29 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
+  // Private skill != private API. Require a long shared URL secret on every POST.
+  // A GET request above remains a public health check and never invokes paid APIs.
+  const secret = process.env.ALICE_WEBHOOK_SECRET || "";
+  const url = new URL(req.url || "/api", "https://example.invalid");
+  const incoming = url.searchParams.get("token") || "";
+  const a = Buffer.from(incoming, "utf8");
+  const b = Buffer.from(secret, "utf8");
+  if (secret.length < 32 || a.length !== b.length || !timingSafeEqual(a, b)) {
+    return res.status(404).json({ error: "Not found" });
+  }
+
   const startedAt = Date.now();
   const remainingMs = () => TOTAL_RESPONSE_BUDGET_MS - (Date.now() - startedAt);
-  const body = req.body && typeof req.body === "object" ? req.body : {};
+  let body;
+  try {
+    body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {});
+    if (typeof body !== "object" || Array.isArray(body)) throw new Error("Invalid payload");
+  } catch {
+    return res.status(400).json({ error: "Bad request" });
+  }
+  if (process.env.ALICE_SKILL_ID && body?.session?.skill_id !== process.env.ALICE_SKILL_ID) {
+    return res.status(403).json({ error: "Unexpected skill" });
+  }
   const text = String(body?.request?.command || body?.request?.original_utterance || "").trim();
   const oldHistory = safeHistory(body?.state?.session?.history);
 
@@ -246,4 +289,4 @@ export default async function handler(req, res) {
   }
 }
 
-export { aliceResponse, fitAliceText, isSearchIntent, safeHistory };
+export { aliceResponse, fitAliceText, isSearchIntent, safeHistory, boundedHistory };
