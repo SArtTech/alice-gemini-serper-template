@@ -1,13 +1,14 @@
 {
-  "name": "alice-gemini-serper-template",
-  "version": "1.0.0",
+  "name": "edith-ai-alice",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
-  "description": "Minimal Vercel webhook for a Yandex Alice skill powered by Gemini with optional Serper web search",
+  "description": "Edith AI private Alice skill with Gemini, Serper, Vercel Functions",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "build": "node --test"
   }
 }
